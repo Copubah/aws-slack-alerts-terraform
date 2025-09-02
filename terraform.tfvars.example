@@ -1,0 +1,15 @@
+# Copy this file to terraform.tfvars and fill in your values
+
+aws_region = "us-east-1"
+environment = "dev"
+project_name = "aws-slack-alerts"
+
+# Slack webhook URL - get this from your Slack app configuration
+slack_webhook_url = "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+
+# Budget configuration
+budget_limit = 100
+budget_email = "your-email@example.com"
+
+# CloudWatch alarm thresholds
+cpu_threshold = 80
