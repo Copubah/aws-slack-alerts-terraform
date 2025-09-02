@@ -314,4 +314,4 @@ python architecture.py
 
 ---
 
-**Created by Charles Opuba** | [GitHub](https://github.com/charlesopuba) | [LinkedIn](https://linkedin.com/in/charlesopuba)
+**Created by Charles Opuba** | [GitHub](https://github.com/Copubah) | [LinkedIn](https://www.linkedin.com/in/charles-opuba-94820574/)

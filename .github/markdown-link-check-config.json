@@ -4,10 +4,10 @@
       "pattern": "^https://hooks.slack.com"
     },
     {
-      "pattern": "^https://github.com/charlesopuba"
+      "pattern": "^https://github.com/Copubah"
     },
     {
-      "pattern": "^https://linkedin.com/in/charlesopuba"
+      "pattern": "^https://www.linkedin.com/in/charles-opuba-94820574/"
     }
   ],
   "replacementPatterns": [

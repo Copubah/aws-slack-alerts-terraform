@@ -12,7 +12,7 @@ Thank you for your interest in contributing to this project!
 
 2. **Local Development**
    ```bash
-   git clone https://github.com/charlesopuba/aws-slack-alerts-terraform.git
+   git clone https://github.com/Copubah/aws-slack-alerts-terraform.git
    cd aws-slack-alerts-terraform
    
    # Install Python dependencies for diagram generation

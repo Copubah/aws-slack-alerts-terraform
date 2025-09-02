@@ -14,7 +14,7 @@ We support the latest version of this project. Please ensure you're using the mo
 If you discover a security vulnerability, please report it responsibly:
 
 1. **Do NOT** create a public GitHub issue
-2. Email the maintainer directly at: charles.opuba@example.com
+2. Email the maintainer directly at: security@example.com or create a private security advisory
 3. Include detailed information about the vulnerability
 4. Allow reasonable time for the issue to be addressed
 
