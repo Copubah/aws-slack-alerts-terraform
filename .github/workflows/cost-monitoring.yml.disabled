@@ -106,7 +106,7 @@ jobs:
         EOF
 
     - name: Upload Cost Report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: cost-report
         path: cost-report.md
@@ -171,7 +171,7 @@ jobs:
         done
 
     - name: Upload Unused Resources Report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: unused-resources-report
         path: unused-resources.md

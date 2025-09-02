@@ -12,9 +12,11 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
 
-  dimensions = {
-    InstanceId = "i-1234567890abcdef0" # Replace with actual instance ID or use data source
-  }
+  # Note: This alarm will be created but won't trigger without a real instance
+  # In production, replace with actual instance ID or use data source
+  # dimensions = {
+  #   InstanceId = "i-1234567890abcdef0"
+  # }
 
   tags = {
     Name = "${var.project_name}-high-cpu-alarm"

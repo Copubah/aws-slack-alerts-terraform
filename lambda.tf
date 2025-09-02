@@ -46,12 +46,12 @@ data "archive_file" "lambda_zip" {
 
 # Lambda Function
 resource "aws_lambda_function" "slack_notifier" {
-  filename         = "lambda_function.zip"
-  function_name    = "${var.project_name}-slack-notifier"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "lambda_function.lambda_handler"
-  runtime         = "python3.9"
-  timeout         = 30
+  filename      = "lambda_function.zip"
+  function_name = "${var.project_name}-slack-notifier"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.9"
+  timeout       = 30
 
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
