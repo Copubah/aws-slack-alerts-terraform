@@ -5,10 +5,11 @@ resource "aws_budgets_budget" "monthly_cost" {
   limit_amount      = var.budget_limit
   limit_unit        = "USD"
   time_unit         = "MONTHLY"
-  time_period_start = "2024-01-01_00:00"
+  time_period_start = "2025-01-01_00:00"
 
-  cost_filters = {
-    Service = ["Amazon Elastic Compute Cloud - Compute"]
+  cost_filter {
+    name   = "Service"
+    values = ["Amazon Elastic Compute Cloud - Compute"]
   }
 
   notification {
