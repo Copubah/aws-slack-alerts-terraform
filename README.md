@@ -16,7 +16,9 @@ This Terraform project creates a comprehensive AWS monitoring and alerting syste
 
 ## Architecture
 
-![Architecture Diagram](architecture.png)
+```
+See architecture.txt for detailed ASCII diagram
+```
 
 The system follows this flow:
 ```
@@ -207,20 +209,23 @@ terraform destroy
 ## License
 
 MIT License - see LICENSE file for details.
-##
- Architecture Diagram Generation
+## Architecture Diagram
 
-To generate the architecture diagram:
+The system architecture is documented in `architecture.txt` with a detailed ASCII diagram showing all components and data flows.
+
+For a visual diagram, you can optionally generate one using:
 
 ```bash
-# Install required Python packages
-pip install diagrams
+# Create virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate
 
-# Generate the diagram
+# Install dependencies
+pip install -r requirements.txt
+
+# Generate diagram
 python architecture.py
 ```
-
-This will create `architecture.png` showing the complete system architecture.
 
 ---
 
