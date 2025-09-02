@@ -1,0 +1,14 @@
+# Development Environment Configuration
+aws_region = "us-east-1"
+environment = "dev"
+project_name = "aws-slack-alerts-dev"
+
+# Slack Configuration
+slack_webhook_url = "https://hooks.slack.com/services/YOUR/DEV/WEBHOOK"
+
+# Budget Configuration (Lower for dev)
+budget_limit = 50
+budget_email = "dev-alerts@example.com"
+
+# Monitoring Thresholds (More relaxed for dev)
+cpu_threshold = 90

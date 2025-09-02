@@ -1,0 +1,139 @@
+name: Infrastructure Drift Detection
+
+on:
+  schedule:
+    # Run every day at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+env:
+  TF_VERSION: "1.6.0"
+
+jobs:
+  drift-detection:
+    name: 'Detect Infrastructure Drift'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, staging, prod]
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+    - name: Setup Terraform Backend
+      run: |
+        cat > backend.tf << EOF
+        terraform {
+          backend "s3" {
+            bucket = "${{ vars.TF_STATE_BUCKET }}"
+            key    = "${{ matrix.environment }}/terraform.tfstate"
+            region = "${{ vars.AWS_REGION || 'us-east-1' }}"
+            encrypt = true
+            dynamodb_table = "${{ vars.TF_LOCK_TABLE }}"
+          }
+        }
+        EOF
+
+    - name: Create Environment Variables
+      run: |
+        cat > terraform.tfvars << EOF
+        aws_region = "${{ vars.AWS_REGION || 'us-east-1' }}"
+        environment = "${{ matrix.environment }}"
+        project_name = "${{ vars.PROJECT_NAME || 'aws-slack-alerts' }}"
+        slack_webhook_url = "${{ secrets.SLACK_WEBHOOK_URL }}"
+        budget_email = "${{ secrets.BUDGET_EMAIL }}"
+        cpu_threshold = ${{ vars.CPU_THRESHOLD || 80 }}
+        budget_limit = ${{ matrix.environment == 'prod' && vars.BUDGET_LIMIT || 100 }}
+        EOF
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Check for Drift
+      id: drift
+      run: |
+        set +e
+        terraform plan -detailed-exitcode -out=drift-plan
+        PLAN_EXIT_CODE=$?
+        set -e
+        
+        if [ $PLAN_EXIT_CODE -eq 0 ]; then
+          echo "drift=false" >> $GITHUB_OUTPUT
+          echo "No drift detected in ${{ matrix.environment }}"
+        elif [ $PLAN_EXIT_CODE -eq 2 ]; then
+          echo "drift=true" >> $GITHUB_OUTPUT
+          echo "Drift detected in ${{ matrix.environment }}"
+          terraform show drift-plan
+        else
+          echo "Error running terraform plan"
+          exit 1
+        fi
+
+    - name: Create Issue for Drift
+      if: steps.drift.outputs.drift == 'true'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const title = `🚨 Infrastructure Drift Detected - ${{ matrix.environment }}`;
+          const body = `
+          ## Infrastructure Drift Detected
+          
+          **Environment:** ${{ matrix.environment }}
+          **Detection Time:** ${new Date().toISOString()}
+          
+          Terraform has detected drift in the ${{ matrix.environment }} environment. 
+          This means the actual infrastructure state differs from the Terraform state.
+          
+          ### Next Steps
+          1. Review the drift plan in the workflow logs
+          2. Determine if changes were made outside of Terraform
+          3. Either:
+             - Apply the plan to bring infrastructure back to desired state
+             - Update Terraform configuration to match current state
+          
+          ### Workflow Run
+          [View Details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          `;
+          
+          // Check if issue already exists
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['infrastructure-drift', `environment:${{ matrix.environment }}`],
+            state: 'open'
+          });
+          
+          if (issues.data.length === 0) {
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['infrastructure-drift', `environment:${{ matrix.environment }}`, 'priority:high']
+            });
+          }
+
+    - name: Send Slack Notification
+      if: steps.drift.outputs.drift == 'true'
+      run: |
+        # Try to get SNS topic ARN and send notification
+        if terraform output sns_topic_arn > /dev/null 2>&1; then
+          SNS_TOPIC_ARN=$(terraform output -raw sns_topic_arn)
+          aws sns publish \
+            --topic-arn "$SNS_TOPIC_ARN" \
+            --subject "🚨 Infrastructure Drift Detected" \
+            --message "Drift detected in ${{ matrix.environment }} environment. Check GitHub Actions for details."
+        fi

@@ -1,0 +1,111 @@
+name: CD - Deploy to AWS
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+      destroy:
+        description: 'Destroy infrastructure'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  TF_VERSION: "1.6.0"
+
+jobs:
+  deploy:
+    name: 'Deploy Infrastructure'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+    - name: Setup Terraform Backend
+      run: |
+        cat > backend.tf << EOF
+        terraform {
+          backend "s3" {
+            bucket = "${{ vars.TF_STATE_BUCKET }}"
+            key    = "${{ github.event.inputs.environment || 'dev' }}/terraform.tfstate"
+            region = "${{ vars.AWS_REGION || 'us-east-1' }}"
+            encrypt = true
+            dynamodb_table = "${{ vars.TF_LOCK_TABLE }}"
+          }
+        }
+        EOF
+
+    - name: Create Terraform Variables File
+      run: |
+        cat > terraform.tfvars << EOF
+        aws_region = "${{ vars.AWS_REGION || 'us-east-1' }}"
+        environment = "${{ github.event.inputs.environment || 'dev' }}"
+        project_name = "${{ vars.PROJECT_NAME || 'aws-slack-alerts' }}"
+        slack_webhook_url = "${{ secrets.SLACK_WEBHOOK_URL }}"
+        budget_email = "${{ secrets.BUDGET_EMAIL }}"
+        cpu_threshold = ${{ vars.CPU_THRESHOLD || 80 }}
+        budget_limit = ${{ vars.BUDGET_LIMIT || 100 }}
+        EOF
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Plan
+      run: terraform plan -out=tfplan
+      if: ${{ !github.event.inputs.destroy }}
+
+    - name: Terraform Apply
+      run: terraform apply -auto-approve tfplan
+      if: ${{ !github.event.inputs.destroy }}
+
+    - name: Terraform Destroy
+      run: terraform destroy -auto-approve
+      if: ${{ github.event.inputs.destroy }}
+
+    - name: Test Deployment
+      if: ${{ !github.event.inputs.destroy }}
+      run: |
+        # Get SNS topic ARN from Terraform output
+        SNS_TOPIC_ARN=$(terraform output -raw sns_topic_arn)
+        
+        # Send test message
+        aws sns publish \
+          --topic-arn "$SNS_TOPIC_ARN" \
+          --subject "CI/CD Test Alert" \
+          --message "Deployment successful for environment: ${{ github.event.inputs.environment || 'dev' }}"
+        
+        echo "Test notification sent to Slack"
+
+    - name: Update Deployment Status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deployment successful"
+        else
+          echo "❌ Deployment failed"
+        fi

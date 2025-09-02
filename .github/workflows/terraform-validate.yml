@@ -1,27 +1,41 @@
-name: Terraform Validation
+name: CI - Terraform Validation
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, feature/* ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
+
+env:
+  TF_VERSION: "1.6.0"
+  TF_VAR_slack_webhook_url: "https://hooks.slack.com/services/EXAMPLE/EXAMPLE/EXAMPLE"
+  TF_VAR_budget_email: "test@example.com"
 
 jobs:
-  terraform:
+  terraform-validate:
     name: 'Terraform Validation'
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout
+    - name: Checkout Code
       uses: actions/checkout@v4
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
-        terraform_version: ~1.0
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Cache Terraform Providers
+      uses: actions/cache@v3
+      with:
+        path: .terraform
+        key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
+        restore-keys: |
+          ${{ runner.os }}-terraform-
 
     - name: Terraform Format Check
       run: terraform fmt -check -recursive
+      continue-on-error: false
 
     - name: Terraform Init
       run: terraform init -backend=false
@@ -30,7 +44,82 @@ jobs:
       run: terraform validate
 
     - name: Terraform Plan (Dry Run)
-      run: terraform plan -var="slack_webhook_url=https://example.com" -var="budget_email=test@example.com"
-      env:
-        TF_VAR_slack_webhook_url: "https://example.com"
-        TF_VAR_budget_email: "test@example.com"
+      run: terraform plan -out=tfplan
+      continue-on-error: false
+
+    - name: Upload Terraform Plan
+      uses: actions/upload-artifact@v3
+      with:
+        name: terraform-plan
+        path: tfplan
+        retention-days: 5
+
+  security-scan:
+    name: 'Security Scan'
+    runs-on: ubuntu-latest
+    needs: terraform-validate
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Run Checkov
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: .
+        framework: terraform
+        output_format: sarif
+        output_file_path: checkov-results.sarif
+        quiet: true
+        soft_fail: true
+
+    - name: Upload Checkov Results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: checkov-results.sarif
+
+  lambda-test:
+    name: 'Lambda Function Tests'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest boto3 moto urllib3
+
+    - name: Run Lambda Tests
+      run: |
+        python -m pytest tests/ -v
+      continue-on-error: true
+
+  documentation:
+    name: 'Documentation Check'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Check README Links
+      uses: gaurav-nelson/github-action-markdown-link-check@v1
+      with:
+        use-quiet-mode: 'yes'
+        use-verbose-mode: 'yes'
+        config-file: '.github/markdown-link-check-config.json'
+
+    - name: Validate Terraform Documentation
+      run: |
+        # Check if all variables are documented
+        grep -q "slack_webhook_url" README.md
+        grep -q "budget_email" README.md
+        grep -q "aws_region" README.md

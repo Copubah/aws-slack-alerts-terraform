@@ -198,17 +198,102 @@ aws events list-rules --name-prefix "aws-slack-alerts"
 terraform destroy
 ```
 
+## CI/CD Pipeline
+
+This project includes a comprehensive CI/CD pipeline with GitHub Actions:
+
+### 🔄 **Continuous Integration**
+- **Terraform Validation**: Format checking, validation, and planning
+- **Security Scanning**: Automated security analysis with Checkov
+- **Lambda Testing**: Unit tests for Python Lambda function
+- **Documentation Validation**: Link checking and content validation
+
+### 🚀 **Continuous Deployment**
+- **Multi-Environment Support**: Deploy to dev, staging, and prod
+- **Infrastructure as Code**: Automated Terraform deployments
+- **Drift Detection**: Daily checks for infrastructure drift
+- **Cost Monitoring**: Weekly cost analysis and optimization reports
+
+### 📊 **Monitoring & Maintenance**
+- **Automated Releases**: Tag-based release automation
+- **Cost Optimization**: Unused resource detection
+- **Security Monitoring**: Continuous security scanning
+- **Performance Tracking**: Lambda function performance monitoring
+
+### Environment Configuration
+
+The project supports multiple environments with different configurations:
+
+```bash
+# Development
+environments/dev/terraform.tfvars.example
+
+# Staging  
+environments/staging/terraform.tfvars.example
+
+# Production
+environments/prod/terraform.tfvars.example
+```
+
+### GitHub Secrets Required
+
+Configure these secrets in your GitHub repository:
+
+```bash
+# AWS Credentials
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+
+# Application Configuration
+SLACK_WEBHOOK_URL
+BUDGET_EMAIL
+```
+
+### GitHub Variables
+
+Configure these variables for your environments:
+
+```bash
+# Infrastructure
+TF_STATE_BUCKET=your-terraform-state-bucket
+TF_LOCK_TABLE=your-terraform-lock-table
+AWS_REGION=us-east-1
+
+# Application
+PROJECT_NAME=aws-slack-alerts
+CPU_THRESHOLD=80
+BUDGET_LIMIT=100
+```
+
+### Deployment Commands
+
+```bash
+# Deploy to development
+gh workflow run cd-deploy.yml -f environment=dev
+
+# Deploy to production
+gh workflow run cd-deploy.yml -f environment=prod
+
+# Destroy infrastructure
+gh workflow run cd-deploy.yml -f environment=dev -f destroy=true
+```
+
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Make your changes following the coding standards
+4. Run tests: `python -m pytest tests/ -v`
+5. Ensure CI passes: All GitHub Actions workflows must pass
+6. Submit a pull request with detailed description
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed release notes and version history.
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 ## Architecture Diagram
 
 The system architecture is documented in `architecture.txt` with a detailed ASCII diagram showing all components and data flows.

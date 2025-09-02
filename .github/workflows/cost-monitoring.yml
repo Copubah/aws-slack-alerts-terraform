@@ -1,0 +1,178 @@
+name: Cost Monitoring & Optimization
+
+on:
+  schedule:
+    # Run weekly on Mondays at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+env:
+  TF_VERSION: "1.6.0"
+
+jobs:
+  cost-analysis:
+    name: 'AWS Cost Analysis'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+    - name: Get Cost and Usage Data
+      id: costs
+      run: |
+        # Get costs for the last 7 days
+        END_DATE=$(date +%Y-%m-%d)
+        START_DATE=$(date -d '7 days ago' +%Y-%m-%d)
+        
+        # Get total costs
+        TOTAL_COST=$(aws ce get-cost-and-usage \
+          --time-period Start=$START_DATE,End=$END_DATE \
+          --granularity DAILY \
+          --metrics BlendedCost \
+          --group-by Type=DIMENSION,Key=SERVICE \
+          --query 'ResultsByTime[*].Total.BlendedCost.Amount' \
+          --output text | awk '{sum += $1} END {printf "%.2f", sum}')
+        
+        # Get costs by service
+        SERVICES_COST=$(aws ce get-cost-and-usage \
+          --time-period Start=$START_DATE,End=$END_DATE \
+          --granularity DAILY \
+          --metrics BlendedCost \
+          --group-by Type=DIMENSION,Key=SERVICE \
+          --query 'ResultsByTime[0].Groups[?Total.BlendedCost.Amount>`0.01`].[Keys[0],Total.BlendedCost.Amount]' \
+          --output table)
+        
+        echo "total_cost=$TOTAL_COST" >> $GITHUB_OUTPUT
+        echo "services_cost<<EOF" >> $GITHUB_OUTPUT
+        echo "$SERVICES_COST" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Check Budget Status
+      id: budget
+      run: |
+        # Get budget information
+        BUDGET_NAME="${{ vars.PROJECT_NAME || 'aws-slack-alerts' }}-monthly-budget"
+        
+        BUDGET_INFO=$(aws budgets describe-budget \
+          --account-id $(aws sts get-caller-identity --query Account --output text) \
+          --budget-name "$BUDGET_NAME" \
+          --query 'Budget.[BudgetLimit.Amount,CalculatedSpend.ActualSpend.Amount]' \
+          --output text 2>/dev/null || echo "100.00 0.00")
+        
+        BUDGET_LIMIT=$(echo $BUDGET_INFO | cut -d' ' -f1)
+        ACTUAL_SPEND=$(echo $BUDGET_INFO | cut -d' ' -f2)
+        
+        USAGE_PERCENT=$(echo "scale=2; $ACTUAL_SPEND * 100 / $BUDGET_LIMIT" | bc)
+        
+        echo "budget_limit=$BUDGET_LIMIT" >> $GITHUB_OUTPUT
+        echo "actual_spend=$ACTUAL_SPEND" >> $GITHUB_OUTPUT
+        echo "usage_percent=$USAGE_PERCENT" >> $GITHUB_OUTPUT
+
+    - name: Generate Cost Report
+      run: |
+        cat > cost-report.md << EOF
+        # AWS Cost Report - $(date +%Y-%m-%d)
+        
+        ## Summary
+        - **Total Cost (Last 7 days):** \$$${{ steps.costs.outputs.total_cost }}
+        - **Monthly Budget:** \$$${{ steps.budget.outputs.budget_limit }}
+        - **Current Month Spend:** \$$${{ steps.budget.outputs.actual_spend }}
+        - **Budget Usage:** ${{ steps.budget.outputs.usage_percent }}%
+        
+        ## Cost by Service (Last 7 days)
+        \`\`\`
+        ${{ steps.costs.outputs.services_cost }}
+        \`\`\`
+        
+        ## Recommendations
+        - Monitor Lambda function duration to optimize costs
+        - Review CloudWatch log retention periods
+        - Consider using Reserved Instances for consistent workloads
+        - Optimize GuardDuty data sources based on security needs
+        
+        ## Cost Optimization Tips
+        1. **Lambda**: Optimize memory allocation and execution time
+        2. **CloudWatch**: Set appropriate log retention periods
+        3. **SNS**: Use message filtering to reduce unnecessary notifications
+        4. **GuardDuty**: Review data source configurations periodically
+        EOF
+
+    - name: Upload Cost Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: cost-report
+        path: cost-report.md
+        retention-days: 30
+
+    - name: Check for Cost Alerts
+      run: |
+        USAGE_PERCENT=${{ steps.budget.outputs.usage_percent }}
+        
+        if (( $(echo "$USAGE_PERCENT > 90" | bc -l) )); then
+          echo "🚨 HIGH ALERT: Budget usage is at ${USAGE_PERCENT}%"
+          echo "::warning::Budget usage is critically high at ${USAGE_PERCENT}%"
+        elif (( $(echo "$USAGE_PERCENT > 75" | bc -l) )); then
+          echo "⚠️ WARNING: Budget usage is at ${USAGE_PERCENT}%"
+          echo "::warning::Budget usage is high at ${USAGE_PERCENT}%"
+        else
+          echo "✅ Budget usage is healthy at ${USAGE_PERCENT}%"
+        fi
+
+  resource-cleanup:
+    name: 'Unused Resource Detection'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+    - name: Check for Unused Resources
+      run: |
+        echo "# Unused Resource Report - $(date +%Y-%m-%d)" > unused-resources.md
+        echo "" >> unused-resources.md
+        
+        # Check for unused CloudWatch Log Groups (no recent activity)
+        echo "## CloudWatch Log Groups (No activity in 30 days)" >> unused-resources.md
+        aws logs describe-log-groups \
+          --query 'logGroups[?lastEventTime < `'$(date -d '30 days ago' +%s)'000`].[logGroupName,lastEventTime]' \
+          --output table >> unused-resources.md || echo "No unused log groups found" >> unused-resources.md
+        
+        echo "" >> unused-resources.md
+        
+        # Check for unused Lambda functions (no recent invocations)
+        echo "## Lambda Functions (No invocations in 30 days)" >> unused-resources.md
+        for func in $(aws lambda list-functions --query 'Functions[].FunctionName' --output text); do
+          LAST_INVOCATION=$(aws cloudwatch get-metric-statistics \
+            --namespace AWS/Lambda \
+            --metric-name Invocations \
+            --dimensions Name=FunctionName,Value=$func \
+            --start-time $(date -d '30 days ago' --iso-8601) \
+            --end-time $(date --iso-8601) \
+            --period 86400 \
+            --statistics Sum \
+            --query 'Datapoints[].Sum' \
+            --output text)
+          
+          if [ -z "$LAST_INVOCATION" ] || [ "$LAST_INVOCATION" = "None" ]; then
+            echo "- $func (No invocations in 30 days)" >> unused-resources.md
+          fi
+        done
+
+    - name: Upload Unused Resources Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: unused-resources-report
+        path: unused-resources.md
+        retention-days: 30

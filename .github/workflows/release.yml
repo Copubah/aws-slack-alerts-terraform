@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: 'Create Release'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Generate Changelog
+      id: changelog
+      run: |
+        # Get the previous tag
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+        
+        if [ -z "$PREV_TAG" ]; then
+          # First release
+          CHANGELOG=$(git log --pretty=format:"- %s" --reverse)
+        else
+          # Generate changelog since last tag
+          CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --reverse)
+        fi
+        
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: |
+          ## Changes in this Release
+          
+          ${{ steps.changelog.outputs.changelog }}
+          
+          ## Deployment Instructions
+          
+          1. Update your `terraform.tfvars` file with the latest configuration
+          2. Run `terraform init` to initialize the new version
+          3. Run `terraform plan` to review changes
+          4. Run `terraform apply` to deploy
+          
+          ## Breaking Changes
+          
+          Please check the [CHANGELOG.md](CHANGELOG.md) for any breaking changes.
+          
+          ## Security Notes
+          
+          - Ensure your Slack webhook URL is kept secure
+          - Review IAM permissions after upgrade
+          - Check GuardDuty configuration for new features
+        draft: false
+        prerelease: false
+
+  deploy-prod:
+    name: 'Deploy to Production'
+    runs-on: ubuntu-latest
+    needs: release
+    environment: prod
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.6.0"
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+    - name: Deploy to Production
+      run: |
+        # Setup backend for production
+        cat > backend.tf << EOF
+        terraform {
+          backend "s3" {
+            bucket = "${{ vars.TF_STATE_BUCKET }}"
+            key    = "prod/terraform.tfstate"
+            region = "${{ vars.AWS_REGION || 'us-east-1' }}"
+            encrypt = true
+            dynamodb_table = "${{ vars.TF_LOCK_TABLE }}"
+          }
+        }
+        EOF
+        
+        # Create production variables
+        cat > terraform.tfvars << EOF
+        aws_region = "${{ vars.AWS_REGION || 'us-east-1' }}"
+        environment = "prod"
+        project_name = "${{ vars.PROJECT_NAME || 'aws-slack-alerts' }}"
+        slack_webhook_url = "${{ secrets.SLACK_WEBHOOK_URL }}"
+        budget_email = "${{ secrets.BUDGET_EMAIL }}"
+        cpu_threshold = ${{ vars.CPU_THRESHOLD || 80 }}
+        budget_limit = ${{ vars.BUDGET_LIMIT || 500 }}
+        EOF
+        
+        terraform init
+        terraform plan -out=tfplan
+        terraform apply -auto-approve tfplan
+        
+        # Send release notification
+        SNS_TOPIC_ARN=$(terraform output -raw sns_topic_arn)
+        aws sns publish \
+          --topic-arn "$SNS_TOPIC_ARN" \
+          --subject "🚀 Production Release" \
+          --message "AWS Slack Alerts ${{ github.ref }} deployed to production successfully!"

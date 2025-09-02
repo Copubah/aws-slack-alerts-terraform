@@ -1,0 +1,14 @@
+# Production Environment Configuration
+aws_region = "us-east-1"
+environment = "prod"
+project_name = "aws-slack-alerts-prod"
+
+# Slack Configuration
+slack_webhook_url = "https://hooks.slack.com/services/YOUR/PROD/WEBHOOK"
+
+# Budget Configuration (Higher for production)
+budget_limit = 500
+budget_email = "prod-alerts@example.com"
+
+# Monitoring Thresholds (Strict for production)
+cpu_threshold = 75

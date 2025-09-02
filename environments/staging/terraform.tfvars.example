@@ -1,0 +1,14 @@
+# Staging Environment Configuration
+aws_region = "us-east-1"
+environment = "staging"
+project_name = "aws-slack-alerts-staging"
+
+# Slack Configuration
+slack_webhook_url = "https://hooks.slack.com/services/YOUR/STAGING/WEBHOOK"
+
+# Budget Configuration
+budget_limit = 150
+budget_email = "staging-alerts@example.com"
+
+# Monitoring Thresholds
+cpu_threshold = 85
