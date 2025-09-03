@@ -27,7 +27,7 @@ This guide covers deploying the AWS Slack Alerts infrastructure across different
    ```bash
    # Create S3 bucket for state
    aws s3 mb s3://your-terraform-state-dev --region us-east-1
-   
+
    # Create DynamoDB table for locking
    aws dynamodb create-table \
      --table-name terraform-lock-dev \
@@ -61,12 +61,12 @@ This guide covers deploying the AWS Slack Alerts infrastructure across different
    ```bash
    # Create S3 bucket for state
    aws s3 mb s3://your-terraform-state-prod --region us-east-1
-   
+
    # Enable versioning and encryption
    aws s3api put-bucket-versioning \
      --bucket your-terraform-state-prod \
      --versioning-configuration Status=Enabled
-   
+
    aws s3api put-bucket-encryption \
      --bucket your-terraform-state-prod \
      --server-side-encryption-configuration '{
@@ -76,7 +76,7 @@ This guide covers deploying the AWS Slack Alerts infrastructure across different
          }
        }]
      }'
-   
+
    # Create DynamoDB table for locking
    aws dynamodb create-table \
      --table-name terraform-lock-prod \
@@ -283,7 +283,7 @@ terraform destroy -auto-approve
 
 ### 1. Environment-Specific Budgets
 - Development: $50/month
-- Staging: $150/month  
+- Staging: $150/month
 - Production: $500/month
 
 ### 2. Cost Monitoring

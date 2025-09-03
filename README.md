@@ -66,7 +66,7 @@ AWS Services → EventBridge/CloudWatch → SNS Topic → Lambda → Slack
    ```bash
    # Quick test with your webhook URL
    python quick_slack_test.py "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
-   
+
    # Interactive test with multiple message formats
    python test_slack_integration.py
    ```
@@ -243,7 +243,7 @@ The project supports multiple environments with different configurations:
 # Development
 environments/dev/terraform.tfvars.example
 
-# Staging  
+# Staging
 environments/staging/terraform.tfvars.example
 
 # Production

@@ -14,10 +14,10 @@ Thank you for your interest in contributing to this project!
    ```bash
    git clone https://github.com/Copubah/aws-slack-alerts-terraform.git
    cd aws-slack-alerts-terraform
-   
+
    # Install Python dependencies for diagram generation
    pip install -r requirements.txt
-   
+
    # Copy and configure variables
    cp terraform.tfvars.example terraform.tfvars
    # Edit terraform.tfvars with your values
@@ -29,7 +29,7 @@ Thank you for your interest in contributing to this project!
    terraform init
    terraform validate
    terraform plan
-   
+
    # Generate architecture diagram
    python architecture.py
    ```
