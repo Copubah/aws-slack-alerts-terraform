@@ -14,8 +14,8 @@ output "lambda_function_arn" {
 }
 
 output "guardduty_detector_id" {
-  description = "ID of the GuardDuty detector"
-  value       = aws_guardduty_detector.main.id
+  description = "ID of the existing GuardDuty detector"
+  value       = local.guardduty_detector_id
 }
 
 output "cloudwatch_alarms" {

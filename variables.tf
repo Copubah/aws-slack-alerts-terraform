@@ -38,3 +38,9 @@ variable "budget_email" {
   description = "Email for budget notifications"
   type        = string
 }
+
+variable "use_existing_guardduty" {
+  description = "Whether to use existing GuardDuty detector (true) or create new one (false)"
+  type        = bool
+  default     = true
+}
