@@ -62,13 +62,28 @@ AWS Services → EventBridge/CloudWatch → SNS Topic → Lambda → Slack
    terraform apply
    ```
 
-3. **Test the integration**:
+3. **Test Slack integration** (before deployment):
    ```bash
-   # Trigger a test notification
+   # Quick test with your webhook URL
+   python quick_slack_test.py "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+   
+   # Interactive test with multiple message formats
+   python test_slack_integration.py
+   ```
+
+4. **Deploy infrastructure**:
+   ```bash
+   terraform plan
+   terraform apply
+   ```
+
+5. **Test the full integration**:
+   ```bash
+   # Trigger a test notification through AWS
    aws sns publish \
      --topic-arn $(terraform output -raw sns_topic_arn) \
      --subject "Test Alert" \
-     --message "This is a test message from AWS"
+     --message '{"AlarmName":"TestAlarm","NewStateValue":"ALARM","NewStateReason":"This is a test"}'
    ```
 
 ## Configuration
